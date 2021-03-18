@@ -56,3 +56,16 @@ def cost(server, need_hardware, need_electroic, money):
     if need_electroic:
         money += server.electroic_cost
     return money
+
+
+# 服务器初始cpu 内存之间的倍数差距
+def get_key_value(server):
+    return server.get_beishu()
+
+
+# 服务器剩余资源
+def get_left_res(server):
+    a_cpu, a_memory = server.get_anode_info()
+    b_cpu, b_memory = server.get_bnode_info()
+
+    return a_cpu + a_memory + b_cpu + b_memory
