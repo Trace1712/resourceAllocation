@@ -1,3 +1,4 @@
+import sys
 # 服务器类型
 class ServerKind:
 
@@ -11,12 +12,23 @@ class ServerKind:
         # 服务器电费
         self.electroic_cost = electroic_cost
 
+        # 服务器初始资源
+        self.cpu = cpu
+        self.memory = memory
+
         # 服务器资源
         self.a_cpu = cpu // 2
         self.a_memory = memory // 2
 
         self.b_cpu = cpu // 2
         self.b_memory = memory // 2
+
+        # 服务器上运行的虚拟机
+        # {_id: vm_name}
+        self.vm_running = {}
+
+        # 服务器上运行的单节点虚拟机
+        self.single_vm_node = {}
 
     # 获取服务器名字
     def get_server_name(self):
@@ -31,17 +43,25 @@ class ServerKind:
         return self.b_cpu, self.b_memory
 
     # 资源分配
-    def distribute_resource(self, cpu, memory, kind):
+    def distribute_resource(self, cpu, memory, kind, _id, vm_name):
+        # 加入运行节点列表
+        self.vm_running[_id] = vm_name
         if kind == "0":
-            return self.S_distribute_resource(cpu, memory)
+            # 加入单节点列表
+            node = self.S_distribute_resource(cpu, memory)
+            self.single_vm_node[_id] = node
+
         else:
             return self.D_distribute_resource(cpu, memory)
 
     # cpu 和 memory的倍数
     def get_beishu(self):
+        if self.a_memory == 0 or self.a_cpu == 0:
+            return sys.maxsize
         if self.a_cpu >= self.a_memory:
             return self.a_cpu // self.a_memory
-
+        else:
+            return self.a_memory // self.a_cpu
     # 单节点资源分配
     def S_distribute_resource(self, cpu: int, memory: int):
         a_cpu, a_memory = self.get_anode_info()
@@ -50,9 +70,11 @@ class ServerKind:
             if a_cpu + a_memory >= b_cpu + b_memory:
                 self.a_cpu -= cpu
                 self.a_memory -= memory
+                return "A"
             else:
                 self.b_cpu -= cpu
                 self.b_memory -= memory
+                return "B"
         elif b_cpu >= cpu and b_memory >= memory:
             self.b_cpu -= cpu
             self.b_memory -= memory
@@ -64,13 +86,50 @@ class ServerKind:
 
     # 双节点资源分配
     def D_distribute_resource(self, cpu: int, memory: int):
-        if (self.a_cpu >= cpu // 2 and self.b_cpu >= cpu // 2) and (self.a_memory >= memory // 2 and self.b_memory >= memory // 2):
+        if (self.a_cpu >= cpu // 2 and self.b_cpu >= cpu // 2) and (
+                self.a_memory >= memory // 2 and self.b_memory >= memory // 2):
             self.a_cpu -= cpu // 2
             self.a_memory -= memory // 2
             self.b_cpu -= cpu // 2
             self.b_memory -= memory // 2
         else:
             print("资源不足分配")
+
+    # 判断虚拟机是否在此服务器上
+    def is_on(self, _id):
+        return _id in self.vm_running.keys()
+
+    def release_resource(self, _id, vm_lst):
+        """
+        释放资源
+        :param _id: 需要释放的虚拟机id
+        :param vm_lst: 虚拟机列表 用来查看对应种类的资源
+        :return: None
+        """
+        if not self.is_on(_id):
+            print("虚拟机不在此服务器上")
+        else:
+            for vm in vm_lst:
+                if self.vm_running[_id] == vm.get_name():
+                    # 单节点释放
+                    if vm.get_node_kind() == "0":
+                        if self.single_vm_node[_id] == "A":
+                            self.a_cpu += vm.get_cpu()
+                            self.a_memory += vm.get_memory()
+                        elif self.single_vm_node[_id] == "B":
+                            self.b_cpu += vm.get_cpu()
+                            self.b_memory += vm.get_memory()
+                        # 删除运行服务器中的节点
+                        # 删除单节点服务器的节点
+                        del self.single_vm_node[_id]
+                    # 双节点释放
+                    elif vm.get_node_kind() == "1":
+                        self.a_cpu += vm.get_cpu() // 2
+                        self.b_cpu += vm.get_cpu() // 2
+                        self.a_memory += vm.get_memory() // 2
+                        self.b_memory += vm.get_memory() // 2
+                        # 删除运行服务器的节点
+            del self.vm_running[_id]
 
 
 # 虚拟机类型
