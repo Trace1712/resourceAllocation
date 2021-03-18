@@ -2,7 +2,7 @@ from utils import *
 import random
 import collections
 
-train_path = "training-1.txt"
+train_path = "../training-1.txt"
 running_server = []
 
 
@@ -11,6 +11,8 @@ def main():
     # 服务器数量
     server_num = int(f.readline().strip())
     server_list = []
+    # 服务器编码
+    start_num = 0
     # 存储服务器类型
     for _ in range(server_num):
         name, cpu, memory, hardware_cost, electroic_cost = f.readline().strip().strip("(").strip(")").split(",")
@@ -29,7 +31,7 @@ def main():
     for _ in range(request_num):
         list_request.append(f.readline().strip())
     # 处理第一天请求 返回现在的费用
-    price = MCMC(list_request, server_list, vm_list, running_server)
+    price,start_num = MCMC(list_request, server_list, vm_list, running_server, start_num)
     # running_server 排序
     running_lst = sorted(running_server, key=get_left_res)
 
@@ -41,8 +43,8 @@ def main():
         list_request = []
         for _ in range(day_num):
             list_request.append(f.readline().strip())
-        price += request_policy(running_lst, server_list1, server_list2, vm_list, list_request)
-
+        one_price,start_num = request_policy(running_lst, server_list1, server_list2, vm_list, list_request,start_num)
+        price += one_price
     # 计算电费
     for server in running_lst:
         if len(server.vm_running) != 0:
@@ -51,9 +53,10 @@ def main():
 
 
 # 第一天请求策略
-def MCMC(request_lst, server_lst, vm_list, running_server=None):
+def MCMC(request_lst, server_lst, vm_list, running_server=None, start_num=0):
     """
 
+    :param start_num:  服务器开始编号
     :param running_server:
     :param request_lst: 请求列表
     :param server_lst:  可用服务器列表
@@ -62,12 +65,21 @@ def MCMC(request_lst, server_lst, vm_list, running_server=None):
     """
     all_prices = 9999999
     temp_server = []
+    final_server = []
     count = 0
+    # 分配位置
+    install_address = {}
+    # 单节点额外信息
+    single_address = {}
     while count < 1000:
+        start_num = 0
+        temp_server = []
         lst = request_lst
         temp_prices = 0
         # 初始化服务器
         server = server_lst[random.randint(0, len(server_lst) - 1)]
+        server.allocate_server_code(start_num)
+        start_num += 1
         # 增加成本
         temp_prices += cost(server, need_hardware=True, need_electroic=True, money=temp_prices)
         temp_server.append(server)
@@ -87,24 +99,39 @@ def MCMC(request_lst, server_lst, vm_list, running_server=None):
             if changed:
                 temp_prices += cost(server, need_hardware=True, need_electroic=True, money=temp_prices)
                 temp_server.append(server)
+                # 设置编号
+                server.allocate_server_code(start_num)
+                start_num += 1
 
-            server.distribute_resource(vm.get_cpu(), vm.get_memory(), vm.get_node_kind(), _id, vm_name)
+            server.distribute_resource(vm.get_cpu(), vm.get_memory(), vm.get_node_kind(), _id, vm_name,single_address)
+            # 存储分配信息
+            install_address[_id] = server.server_code
             # 构建虚拟机信息
             # 服务器中放入虚拟机信息
         if temp_prices < all_prices:
+            final_server = temp_server
             all_prices = temp_prices
+            final_number = start_num
+
         count += 1
-    running_server += temp_server
-    # # 打印输出
-    # print("(purchase," + str(len(running_server)) + ")")
-    # servers = collections.Counter(running_server)
-    # for item in servers.items():
-    #     print("(" + item[0].get_server_name() + "," + str(item[1]) + ")")
+    running_server += final_server
 
-    return all_prices
+    servers = collections.Counter(running_server)
+    # 打印输出
+    print("(purchase," + str(len(servers)) + ")")
+    for item in servers.items():
+        print("(" + item[0].get_server_name() + "," + str(item[1]) + ")")
+    print("(migration,0)")
+    for item in install_address.items():
+        if item[0] not in single_address:
+            print("("+str(item[0]).strip()+","+str(item[1]) + ")")
+        else:
+
+            print("("+str(item[0]).strip()+","+str(item[1])+","+single_address[item[0]]+")")
+    return all_prices,final_number
 
 
-def request_policy(running_server, server_list1, server_list2, vm_lst, request_lst):
+def request_policy(running_server, server_list1, server_list2, vm_lst, request_lst,start_num):
     """
     请求处理策略
     init 获取两种排序之后的服务器列表
@@ -113,6 +140,7 @@ def request_policy(running_server, server_list1, server_list2, vm_lst, request_l
     3.从两个服务器列表中 选择服务器类型与虚拟机一样的最大的型号
     4.填入服务器
     所有请求全部完成后,判断所有有空闲容量的服务器，判断更小的服务器能否替代
+    :param start_num: 起始编号
     :param server_list1:    cpu > memory 的服务器列表
     :param server_list2:    memory > cpu 的服务器列表
     :param running_server:  正在运行的服务器
@@ -125,29 +153,45 @@ def request_policy(running_server, server_list1, server_list2, vm_lst, request_l
     all_add_server = 0
     # 扩容的虚拟机列表
     temp_server = []
+    # 分配位置
+    install_address = {}
+    # 单节点更多信息
+    single_install_address = {}
     for request in request_lst:
         op_lst = request.strip("(").strip(")").split(",")
         # add操作
         if len(op_lst) == 3:
-            all_add_server += 1
             op, vm_name, _id = request.strip("(").strip(")").split(",")
             # 判断现有服务器中是否有空位
             vm = get_vm(vm_name, vm_lst)
             # 有位子直接分配
             # 无位子需要加装虚拟机
-            if not find_empty_space(running_server, vm, _id):
+            if not find_empty_space(running_server, vm, _id,install_address,single_install_address):
+                # 加装
+                all_add_server += 1
                 server = None
                 if vm.get_cpu() >= vm.get_memory():
                     # 加装服务器
                     for server in server_list1:
                         if is_full(server, vm):
-                            server.distribute_resource(vm.get_cpu(), vm.get_memory(), vm.get_node_kind(), _id)
+                            # 服务器分配ID
+                            server.allocate_server_code(start_num)
+                            server.distribute_resource(vm.get_cpu(), vm.get_memory(), vm.get_node_kind(), _id,vm_name,single_install_address)
+                            install_address[_id] = server.server_code
+                            break
+
                 else:
                     for server in server_list2:
                         if is_full(server, vm):
-                            server.distribute_resource(vm.get_cpu(), vm.get_memory(), vm.get_node_kind(), _id)
+                            # 服务器分配ID
+                            server.allocate_server_code(start_num)
+                            server.distribute_resource(vm.get_cpu(), vm.get_memory(), vm.get_node_kind(), _id,vm_name,single_install_address)
+                            install_address[_id] = server.server_code
+                            break
                 # 加一台服务器 最好加在头部
                 running_server.insert(0, server)
+
+                start_num += 1
                 # 统计这一天加装的服务器
                 temp_server.append(server)
                 prices += server.hardware_cost
@@ -157,17 +201,27 @@ def request_policy(running_server, server_list1, server_list2, vm_lst, request_l
             for server in running_server:
                 if _id in server.vm_running:
                     server.release_resource(_id, vm_lst)
-    print("(purchase,"+str(all_add_server)+")")
+
     servers = collections.Counter(temp_server)
+    print("(purchase," + str(len(servers)) + ")")
+
     for item in servers.items():
         print("(" + item[0].get_server_name() + "," + str(item[1]) + ")")
+    print("(migration,0)")
+    for item in install_address.items():
+        if item[0] not in single_install_address:
+            print("("+str(item[0]).strip()+","+str(item[1])+")")
+        else:
+            print("("+str(item[0]).strip()+","+str(item[1])+","+single_install_address[item[0]]+")")
 
-    return prices
+    return prices,start_num
 
 
-def find_empty_space(running_server, vm, vm_id):
+def find_empty_space(running_server, vm, vm_id,install_address,single_address):
     """
     判断现有服务器中是否有位子放入现有虚拟机
+    :param single_address: 单节点额外信息
+    :param install_address: 分配信息
     :param vm_id: 虚拟机ID
     :param running_server: 运行着虚拟机的服务器
     :param vm: 需要加装的虚拟机
@@ -175,7 +229,8 @@ def find_empty_space(running_server, vm, vm_id):
     """
     for server in running_server:
         if is_full(server, vm):
-            server.distribute_resource(vm.get_cpu(), vm.get_memory(), vm.get_node_kind(), vm_id)
+            server.distribute_resource(vm.get_cpu(), vm.get_memory(), vm.get_node_kind(), vm_id, vm.get_name(),single_address)
+            install_address[vm_id] = server.server_code
             return True
     return False
 
@@ -197,11 +252,6 @@ def sort_server(server_lst):
     server_list1 = sorted(server_list1, key=get_key_value)
     server_list2 = sorted(server_list2, key=get_key_value)
     return server_list1, server_list2
-
-
-# 扩容策略
-def expansion():
-    pass
 
 
 # 迁移策略

@@ -1,4 +1,6 @@
 import sys
+
+
 # 服务器类型
 class ServerKind:
 
@@ -30,6 +32,13 @@ class ServerKind:
         # 服务器上运行的单节点虚拟机
         self.single_vm_node = {}
 
+        # 服务器编号
+        self.server_code = None
+
+    # 分配服务器编号
+    def allocate_server_code(self, num):
+        self.server_code = num
+
     # 获取服务器名字
     def get_server_name(self):
         return self.name.strip()
@@ -43,16 +52,16 @@ class ServerKind:
         return self.b_cpu, self.b_memory
 
     # 资源分配
-    def distribute_resource(self, cpu, memory, kind, _id, vm_name):
+    def distribute_resource(self, cpu, memory, kind, _id, vm_name,single_install_address):
         # 加入运行节点列表
         self.vm_running[_id] = vm_name
         if kind == "0":
             # 加入单节点列表
             node = self.S_distribute_resource(cpu, memory)
             self.single_vm_node[_id] = node
-
+            single_install_address[_id] = node
         else:
-            return self.D_distribute_resource(cpu, memory)
+            self.D_distribute_resource(cpu, memory)
 
     # cpu 和 memory的倍数
     def get_beishu(self):
@@ -62,6 +71,7 @@ class ServerKind:
             return self.a_cpu // self.a_memory
         else:
             return self.a_memory // self.a_cpu
+
     # 单节点资源分配
     def S_distribute_resource(self, cpu: int, memory: int):
         a_cpu, a_memory = self.get_anode_info()
@@ -78,9 +88,11 @@ class ServerKind:
         elif b_cpu >= cpu and b_memory >= memory:
             self.b_cpu -= cpu
             self.b_memory -= memory
+            return "B"
         elif a_cpu >= cpu and a_memory >= memory:
             self.a_cpu -= cpu
             self.a_memory -= memory
+            return "A"
         else:
             print("资源不足分配")
 

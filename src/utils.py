@@ -9,7 +9,7 @@ def get_vm(name, vm_kind_list):
     :return:             虚拟机
     """
     for vm in vm_kind_list:
-        if name == vm.get_name().strip():
+        if name.strip() == vm.get_name().strip():
             return vm
 
 
