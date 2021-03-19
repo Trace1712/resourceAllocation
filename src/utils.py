@@ -63,6 +63,12 @@ def get_key_value(server):
     return server.get_beishu()
 
 
+# sort
+def get_min_resource(server):
+    min_ = min(server.a_cpu, server.a_memory, server.b_cpu, server.b_memory)
+    return min_
+
+
 # 服务器剩余资源
 def get_left_res(server):
     a_cpu, a_memory = server.get_anode_info()

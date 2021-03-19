@@ -52,7 +52,7 @@ class ServerKind:
         return self.b_cpu, self.b_memory
 
     # 资源分配
-    def distribute_resource(self, cpu, memory, kind, _id, vm_name,single_install_address):
+    def distribute_resource(self, cpu, memory, kind, _id, vm_name, single_install_address):
         # 加入运行节点列表
         self.vm_running[_id] = vm_name
         if kind == "0":
@@ -67,10 +67,13 @@ class ServerKind:
     def get_beishu(self):
         if self.a_memory == 0 or self.a_cpu == 0:
             return sys.maxsize
+        # return self.cpu + self.memory
         if self.a_cpu >= self.a_memory:
             return self.a_cpu // self.a_memory
         else:
             return self.a_memory // self.a_cpu
+
+
 
     # 单节点资源分配
     def S_distribute_resource(self, cpu: int, memory: int):
