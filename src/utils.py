@@ -1,5 +1,5 @@
 from kind import *
-
+import collections
 
 def get_vm(name, vm_kind_list):
     """
@@ -75,3 +75,47 @@ def get_left_res(server):
     b_cpu, b_memory = server.get_bnode_info()
 
     return a_cpu + a_memory + b_cpu + b_memory
+
+
+def add_server(server_lst,vm,start_num,single_install_address,install_address,_id,vm_dic,vm_name):
+    """
+    分配服务器
+    :param server_lst: 可选服务器列表
+    :param vm: 虚拟机
+    :param start_num: 虚拟机编号
+    :param single_install_address: 单节点信息
+    :param install_address: 所有信息
+    :param _id: 虚拟机ID
+    :param vm_dic: 虚拟机地址存储
+    :param vm_name: 虚拟机名称
+    :return:
+    """
+    for server in server_lst:
+        server = server.copy_server()
+        if is_full(server, vm):
+            # 服务器分配ID
+            server.allocate_server_code(start_num)
+            server.distribute_resource(vm.get_cpu(), vm.get_memory(), vm.get_node_kind(), _id, vm_name,
+                                       single_install_address, vm_dic)
+            # 服务器编码
+            install_address[_id] = server.server_code
+            return server
+
+def print_info(temp_server,install_address,single_install_address):
+    """
+    打印信息
+    :param temp_server:
+    :param install_address:
+    :param single_install_address:
+    :return:
+    """
+    servers = collections.Counter(temp_server)
+    print("(purchase," + str(len(servers)) + ")")
+    for item in servers.items():
+        print("(" + item[0].get_server_name() + "," + str(item[1]) + ")")
+    print("(migration,0)")
+    for item in install_address.items():
+        if item[0] not in single_install_address:
+            print("("+str(item[0]).strip()+","+str(item[1])+")")
+        else:
+            print("("+str(item[0]).strip()+","+str(item[1])+","+single_install_address[item[0]]+")")

@@ -52,8 +52,10 @@ class ServerKind:
         return self.b_cpu, self.b_memory
 
     # 资源分配
-    def distribute_resource(self, cpu, memory, kind, _id, vm_name, single_install_address):
+    def distribute_resource(self, cpu, memory, kind, _id, vm_name, single_install_address, vm_dic):
         # 加入运行节点列表
+        _id = _id.strip()
+        vm_dic[_id] = self
         self.vm_running[_id] = vm_name
         if kind == "0":
             # 加入单节点列表
@@ -72,8 +74,6 @@ class ServerKind:
             return self.a_cpu // self.a_memory
         else:
             return self.a_memory // self.a_cpu
-
-
 
     # 单节点资源分配
     def S_distribute_resource(self, cpu: int, memory: int):
@@ -146,7 +146,10 @@ class ServerKind:
                         # 删除运行服务器的节点
             del self.vm_running[_id]
 
-
+    # 复制一台服务器
+    def copy_server(self):
+        _server = ServerKind(self.name,self.cpu,self.memory,self.hardware_cost,self.electroic_cost)
+        return _server
 # 虚拟机类型
 class VmKind:
     def __init__(self, name, cpu: int, memory: int, node_kind):

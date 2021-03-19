@@ -4,7 +4,7 @@ import collections
 import sys
 import time
 
-train_path = "../training-1.txt"
+train_path = "training-1.txt"
 running_server = []
 
 
@@ -14,8 +14,6 @@ def main():
     # 服务器数量
     server_num = int(f.readline().strip())
     server_list = []
-    # 服务器编码
-    start_num = 0
     # 存储服务器类型
     for _ in range(server_num):
         name, cpu, memory, hardware_cost, electroic_cost = f.readline().strip().strip("(").strip(")").split(",")
@@ -34,7 +32,7 @@ def main():
     for _ in range(request_num):
         list_request.append(f.readline().strip())
     # 处理第一天请求 返回现在的费用
-    price, start_num = MCMC(list_request, server_list, vm_list, running_server)
+    price, start_num = MCMC(list_request, server_list, vm_list, running_server, vm_dic)
     # running_server 排序
     running_lst = sorted(running_server, key=get_left_res)
 
@@ -42,24 +40,20 @@ def main():
 
     # 之后的请求
     for _ in range(day_num - 1):
-        print("第", _, "天")
-        start = time.time()
+        # start = time.time()
         day_num = int(f.readline().strip())
         list_request = []
         for _ in range(day_num):
             list_request.append(f.readline().strip())
-        one_price, start_num = request_policy(running_lst, server_list1, server_list2, vm_list, list_request, start_num)
-        end = time.time()
-        print(len(running_lst))
-        print(len(list_request))
-        print(end - start)
-        print()
+        one_price, start_num = request_policy(running_lst, server_list1, server_list2, vm_list, list_request, start_num,
+                                              vm_dic)
 
 
 # 第一天请求策略
-def MCMC(request_lst, server_lst, vm_list, running_server=None,vm_dic={}):
+def MCMC(request_lst, server_lst, vm_list, running_server=None, vm_dic=None):
     """
 
+    :param vm_dic:
     :param start_num:  服务器开始编号
     :param running_server:
     :param request_lst: 请求列表
@@ -67,6 +61,8 @@ def MCMC(request_lst, server_lst, vm_list, running_server=None,vm_dic={}):
     :param vm_list:     可用虚拟机列表
     :return: 当天的费用
     """
+    if vm_dic is None:
+        vm_dic = {}
     all_prices = 9999999
     temp_server = []
     final_server = []
@@ -90,6 +86,7 @@ def MCMC(request_lst, server_lst, vm_list, running_server=None,vm_dic={}):
         while len(lst) > 0:
             request = lst.pop()
             op, vm_name, _id = request.strip("(").strip(")").split(",")
+            _id = _id.strip()
             # dic_ = {_id: vm_name}
             vm = get_vm(vm_name.strip(), vm_list)
 
@@ -107,8 +104,8 @@ def MCMC(request_lst, server_lst, vm_list, running_server=None,vm_dic={}):
                 server.allocate_server_code(start_num)
                 start_num += 1
 
-            server.distribute_resource(vm.get_cpu(), vm.get_memory(), vm.get_node_kind(), _id, vm_name, single_address)
-            vm_dic[_id] = server
+            server.distribute_resource(vm.get_cpu(), vm.get_memory(), vm.get_node_kind(), _id, vm_name, single_address,
+                                       vm_dic)
             # 存储分配信息
             install_address[_id] = server.server_code
             # 构建虚拟机信息
@@ -121,22 +118,11 @@ def MCMC(request_lst, server_lst, vm_list, running_server=None,vm_dic={}):
         count += 1
     running_server += final_server
 
-    servers = collections.Counter(running_server)
-    # 打印输出
-    print("(purchase," + str(len(servers)) + ")")
-    for item in servers.items():
-        print("(" + item[0].get_server_name() + "," + str(item[1]) + ")")
-    print("(migration,0)")
-    for item in install_address.items():
-        if item[0] not in single_address:
-            print("(" + str(item[0]).strip() + "," + str(item[1]) + ")")
-        else:
-
-            print("(" + str(item[0]).strip() + "," + str(item[1]) + "," + single_address[item[0]] + ")")
+    print_info(temp_server, install_address, single_address)
     return all_prices, final_number
 
 
-def request_policy(running_server, server_list1, server_list2, vm_lst, request_lst, start_num):
+def request_policy(running_server, server_list1, server_list2, vm_lst, request_lst, start_num, vm_dic):
     """
     请求处理策略
     init 获取两种排序之后的服务器列表
@@ -145,6 +131,7 @@ def request_policy(running_server, server_list1, server_list2, vm_lst, request_l
     3.从两个服务器列表中 选择服务器类型与虚拟机一样的最大的型号
     4.填入服务器
     所有请求全部完成后,判断所有有空闲容量的服务器，判断更小的服务器能否替代
+    :param vm_dic:
     :param start_num: 起始编号
     :param server_list1:    cpu > memory 的服务器列表
     :param server_list2:    memory > cpu 的服务器列表
@@ -162,47 +149,33 @@ def request_policy(running_server, server_list1, server_list2, vm_lst, request_l
     install_address = {}
     # 单节点更多信息
     single_install_address = {}
-    time_ = 0
-    time2 = 0
-    time3 = 0
     for request in request_lst:
         op_lst = request.strip("(").strip(")").split(",")
         # add操作
         if len(op_lst) == 3:
-            start = time.time()
+            # start = time.time()
             op, vm_name, _id = request.strip("(").strip(")").split(",")
+            _id = _id.strip()
             # 判断现有服务器中是否有空位
             vm = get_vm(vm_name, vm_lst)
             # 有位子直接分配
             # 无位子需要加装虚拟机
             if all_add_server % 20 == 0:
                 running_server.sort(key=get_min_resource, reverse=True)
-            result, _time_ = find_empty_space(running_server, vm, _id, install_address, single_install_address)
-            time_ += _time_
+            result, _time_ = find_empty_space(running_server, vm, _id, install_address, single_install_address, vm_dic)
             if not result:
                 # 加装
                 all_add_server += 1
                 server = None
                 if vm.get_cpu() >= vm.get_memory():
                     # 加装服务器
-                    for server in server_list1:
-                        if is_full(server, vm):
-                            # 服务器分配ID
-                            server.allocate_server_code(start_num)
-                            server.distribute_resource(vm.get_cpu(), vm.get_memory(), vm.get_node_kind(), _id, vm_name,
-                                                       single_install_address)
-                            install_address[_id] = server.server_code
-                            break
-
+                    server = add_server(server_list1, vm, start_num, single_install_address, install_address, _id,
+                                        vm_dic,
+                                        vm_name)
                 else:
-                    for server in server_list2:
-                        if is_full(server, vm):
-                            # 服务器分配ID
-                            server.allocate_server_code(start_num)
-                            server.distribute_resource(vm.get_cpu(), vm.get_memory(), vm.get_node_kind(), _id, vm_name,
-                                                       single_install_address)
-                            install_address[_id] = server.server_code
-                            break
+                    server = add_server(server_list2, vm, start_num, single_install_address, install_address, _id,
+                                        vm_dic,
+                                        vm_name)
                 # 加一台服务器 最好加在头部
                 running_server.insert(0, server)
 
@@ -210,39 +183,24 @@ def request_policy(running_server, server_list1, server_list2, vm_lst, request_l
                 # 统计这一天加装的服务器
                 temp_server.append(server)
                 prices += server.hardware_cost
-                end = time.time()
-                time3 += end - start
+
         # del操作
         elif len(op_lst) == 2:
-            start = time.time()
             op, _id = op_lst
-            for server in running_server:
-                if _id in server.vm_running:
-                    server.release_resource(_id, vm_lst)
-            end = time.time()
-            time2 += end - start
-    print("寻找现有空间时间", time_)
-    print("删除虚拟机时间",time2)
-    print("加装服务器时间",time3)
+            # 去除空格
+            _id = _id.strip()
+            server = vm_dic[_id]
+            # 释放服务器
+            server.release_resource(_id, vm_lst)
 
-    # servers = collections.Counter(temp_server)
-    # print("(purchase," + str(len(servers)) + ")")
-    #
-    # for item in servers.items():
-    #     print("(" + item[0].get_server_name() + "," + str(item[1]) + ")")
-    # print("(migration,0)")
-    # for item in install_address.items():
-    #     if item[0] not in single_install_address:
-    #         print("("+str(item[0]).strip()+","+str(item[1])+")")
-    #     else:
-    #         print("("+str(item[0]).strip()+","+str(item[1])+","+single_install_address[item[0]]+")")
-
+    print_info(temp_server, install_address, single_install_address)
     return prices, start_num
 
 
-def find_empty_space(running_server, vm, vm_id, install_address, single_address):
+def find_empty_space(running_server, vm, vm_id, install_address, single_address, vm_dic):
     """
     判断现有服务器中是否有位子放入现有虚拟机
+    :param vm_dic:
     :param single_address: 单节点额外信息
     :param install_address: 分配信息
     :param vm_id: 虚拟机ID
@@ -250,20 +208,22 @@ def find_empty_space(running_server, vm, vm_id, install_address, single_address)
     :param vm: 需要加装的虚拟机
     :return: 是否可以加装
     """
-    start = time.time()
+    # start = time.time()
     count = 0
     for server in running_server:
         if count == 20:
             break
         if is_full(server, vm):
+            # 分配资源
             server.distribute_resource(vm.get_cpu(), vm.get_memory(), vm.get_node_kind(), vm_id, vm.get_name(),
-                                       single_address)
+                                       single_address, vm_dic)
+            # 服务器编码
             install_address[vm_id] = server.server_code
-            end = time.time()
-            return True, end - start
+            # end = time.time()
+            return True, 0
         count += 1
-    end = time.time()
-    return False, end - start
+    # end = time.time()
+    return False, 0
 
 
 def sort_server(server_lst):
